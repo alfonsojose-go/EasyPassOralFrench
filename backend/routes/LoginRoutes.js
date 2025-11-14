@@ -8,7 +8,7 @@ router.post('/register', registerUser);
 // Login route
 router.post('/login', loginUser);
 router.get('/protected', protect, (req, res) => {
-    res.json({ message: `Hello user ${req.user}, you have accessed a protected route!` });
+    res.json({ message: `Hello user ${req.username}, you have accessed a protected route!` });
 });
 
 module.exports = router;
