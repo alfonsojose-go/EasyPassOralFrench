@@ -12,10 +12,7 @@ function App() {
         <nav className="navbar">
           <div className="nav-container">
             <h1 className="nav-logo">Easy Pass Oral French</h1>
-            <div className="nav-links">
-              <Link to="/register" className="nav-link">Register</Link>
-              <Link to="/login" className="nav-link">Login</Link>
-            </div>
+            
           </div>
         </nav>
         

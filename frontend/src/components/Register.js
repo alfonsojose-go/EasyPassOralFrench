@@ -40,6 +40,7 @@ const Register = () => {
                     />      
                 </div>
                 <button type="submit">Register</button>
+                <button type="button" onClick={() => window.location.href = '/login'}>Cancel</button>
             </form>
             {message && <p>{message}</p>}
         </div>
