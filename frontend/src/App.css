@@ -36,3 +36,7 @@
     transform: rotate(360deg);
   }
 }
+/* 整个播放器区域背景淡绿 */
+audio::-webkit-media-controls-timeline {
+  height: 6px;
+}
