@@ -4,47 +4,62 @@ import {
   Route,
   Routes,
   Navigate,
+  Link, // 🔹 add Link import
 } from "react-router-dom";
 import Register from "./components/Register";
 import Login from "./components/Login";
 import Protected from "./components/Protected";
-import Dashboard from "./components/Dashboard"; // 🔹 Newly added: homepage task list
-import TaskDetails from "./components/TaskDetails"; // 🔹 Newly added: task details page
+import Dashboard from "./components/Dashboard";
+import TaskDetails from "./components/TaskDetails";
 import "./App.css";
 
 function App() {
   return (
     <Router>
       <div className="App">
-        {/* Navigation bar at the top */}
+        {/* navi bar */}
         <nav className="navbar">
           <div className="nav-container">
             <h1 className="nav-logo">Easy Pass Oral French</h1>
+
+            {/* Navigation Links */}
+            <div className="nav-links">
+              <Link to="/protected" className="nav-link">
+                👤 Profile
+              </Link>
+              <Link to="/dashboard" className="nav-link">
+                🏠 Task Center
+              </Link>
+              <Link to="/login" className="nav-link">
+                🔐 Login
+              </Link>
+              <Link to="/register" className="nav-link">
+                📝 Register
+              </Link>
+            </div>
           </div>
         </nav>
 
-        {/* Main content area */}
+        {/* main content area*/}
         <main className="main-content">
           <Routes>
-            {/* 🔹 Redirect root path "/" to login page */}
             <Route path="/" element={<Navigate to="/login" replace />} />
-
-            {/* 🔹 Registration page */}
             <Route path="/register" element={<Register />} />
-
-            {/* 🔹 Login page */}
             <Route path="/login" element={<Login />} />
-
-            {/* 🔹 Protected page (requires login) */}
             <Route path="/protected" element={<Protected />} />
-
-            {/* 🔹 Dashboard / Homepage: shows list of tasks */}
             <Route path="/dashboard" element={<Dashboard />} />
-
-            {/* 🔹 Task details page: shows full info for a specific task */}
             <Route path="/task/:id" element={<TaskDetails />} />
           </Routes>
         </main>
+
+        {/* concise footer */}
+        <footer className="footer">
+          <div className="footer-content">
+            <p className="footer-text">
+              © 2024 Easy Pass Oral French - TCF CANADA
+            </p>
+          </div>
+        </footer>
       </div>
     </Router>
   );
