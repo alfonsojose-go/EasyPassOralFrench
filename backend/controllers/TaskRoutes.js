@@ -12,7 +12,7 @@ const {
   deleteImageByIndex,
 } = require("../controllers/TaskItemController");
 
-// 上传配置
+// upload configuration
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     if (file.mimetype.startsWith("image/")) cb(null, "uploads/images");

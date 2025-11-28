@@ -2,7 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const TaskItem = require("../models/TaskItem");
 
-// ---------- 获取任务 ----------
+// ---------- Get Tasks ----------
 exports.getTasks = async (req, res) => {
   try {
     const tasks = await TaskItem.find();
@@ -12,18 +12,18 @@ exports.getTasks = async (req, res) => {
   }
 };
 
-// ---------- 获取单个 ----------
+// ---------- Get Single Task ----------
 exports.getTask = async (req, res) => {
   try {
     const task = await TaskItem.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "任务未找到" });
+    if (!task) return res.status(404).json({ message: "Task not found" });
     res.json(task);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ---------- 创建 ----------
+// ---------- Create Task ----------
 exports.createTask = async (req, res) => {
   try {
     const task = await TaskItem.create(req.body);
@@ -33,11 +33,11 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// ---------- 更新 ----------
+// ---------- Update Task ----------
 exports.updateTask = async (req, res) => {
   try {
     const task = await TaskItem.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "任务未找到" });
+    if (!task) return res.status(404).json({ message: "Task not found" });
 
     task.set(req.body);
 
@@ -59,25 +59,25 @@ exports.updateTask = async (req, res) => {
   }
 };
 
-// ---------- 删除任务 ----------
+// ---------- Delete Task ----------
 exports.deleteTask = async (req, res) => {
   try {
     await TaskItem.findByIdAndDelete(req.params.id);
-    res.json({ message: "删除成功" });
+    res.json({ message: "Delete successful" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ---------- 删除音频 ----------
+// ---------- Delete Audio ----------
 exports.deleteAudioByIndex = async (req, res) => {
   try {
     const task = await TaskItem.findById(req.params.taskId);
-    if (!task) return res.status(404).json({ message: "任务未找到" });
+    if (!task) return res.status(404).json({ message: "Task not found" });
 
     const index = parseInt(req.params.audioIndex);
     if (isNaN(index) || !task.audioPaths[index])
-      return res.status(400).json({ message: "索引无效" });
+      return res.status(400).json({ message: "Invalid index" });
 
     const filePath = task.audioPaths[index];
     const fullPath = path.join(__dirname, "..", filePath);
@@ -91,15 +91,15 @@ exports.deleteAudioByIndex = async (req, res) => {
   }
 };
 
-// ---------- 删除图片 ----------
+// ---------- Delete Image ----------
 exports.deleteImageByIndex = async (req, res) => {
   try {
     const task = await TaskItem.findById(req.params.taskId);
-    if (!task) return res.status(404).json({ message: "任务未找到" });
+    if (!task) return res.status(404).json({ message: "Task not found" });
 
     const index = parseInt(req.params.imageIndex);
     if (isNaN(index) || !task.imagePaths[index])
-      return res.status(400).json({ message: "索引无效" });
+      return res.status(400).json({ message: "Invalid index" });
 
     const filePath = task.imagePaths[index];
     const fullPath = path.join(__dirname, "..", filePath);
