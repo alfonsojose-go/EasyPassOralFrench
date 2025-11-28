@@ -11,6 +11,7 @@ import Protected from "./components/Protected";
 import Dashboard from "./components/Dashboard"; // 🔹 Newly added: homepage task list
 import TaskDetails from "./components/TaskDetails"; // 🔹 Newly added: task details page
 import "./App.css";
+import AddTask from "./components/AddTask";
 
 function App() {
   return (
@@ -43,6 +44,9 @@ function App() {
 
             {/* 🔹 Task details page: shows full info for a specific task */}
             <Route path="/task/:id" element={<TaskDetails />} />
+
+            {/* 🔹 Add Task page: form to add a new task */}
+            <Route path="/add-task" element={<AddTask />} />
           </Routes>
         </main>
       </div>

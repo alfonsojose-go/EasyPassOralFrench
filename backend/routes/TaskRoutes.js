@@ -73,6 +73,38 @@ router.get("/:id", protect, async (req, res) => {
 });
 
 // =======================
+// 🟢 CREATE NEW TASK
+// =======================
+router.post("/", protect, async (req, res) => {
+  try {
+    const { title, taskType, category } = req.body;
+
+    if (!title || !taskType || !category) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const newTask = new TaskItem({
+      userId: req.user.id,   // from token
+      title,
+      taskType,              // plain string, OK
+      category,              // must be OBJECT ID from dropdown
+    });
+
+    await newTask.save();
+
+    const saved = await TaskItem.findById(newTask._id)
+      .populate("taskType", "name")
+      .populate("category", "name");
+
+    res.status(201).json(saved);
+  } catch (err) {
+    console.error("❌ Error creating task:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// =======================
 // 🔹 更新任务 (支持文件上传 + ObjectId 验证)
 // =======================
 router.put(
@@ -158,6 +190,37 @@ router.put(
     }
   }
 );
+
+
+// =======================
+// 🔥 DELETE entire task
+// =======================
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const taskId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    // Ensure the task belongs to the user
+    const deletedTask = await TaskItem.findOneAndDelete({
+      _id: taskId,
+      userId: req.user.id,
+    });
+
+    if (!deletedTask) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    return res.status(200).json({ message: "Task deleted successfully" });
+  } catch (err) {
+    console.error("❌ Delete task error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 // =======================
 // 🔹 删除图片（按索引）
 // =======================
@@ -231,5 +294,19 @@ router.delete("/:id/audio/:index", protect, async (req, res) => {
     res.status(500).json({ message: "删除失败: " + err.message });
   }
 });
+
+// =======================
+// GET all categories
+// =======================
+router.get("/categories", protect, async (req, res) => {
+  try {
+    const categories = await Category.find({ userId: req.user.id });
+    res.json(categories);
+  } catch (err) {
+    console.error("Fetch categories error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 module.exports = router;
