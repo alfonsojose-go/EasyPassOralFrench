@@ -12,7 +12,7 @@ const protect = require("../middleware/authMiddleware");
 const router = express.Router();
 
 // -----------------------
-// 🔹 multer 文件存储设置
+// 🔹 multer file store configuration
 // -----------------------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // =======================
-// ✅ 获取当前用户的所有任务
+// ✅ Get the current user's tasks
 // =======================
 router.get("/", protect, async (req, res) => {
   try {
@@ -46,7 +46,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // =======================
-// ✅ 获取单个任务详情
+// ✅ Get the taskItem information
 // =======================
 router.get("/:id", protect, async (req, res) => {
   try {
@@ -73,7 +73,7 @@ router.get("/:id", protect, async (req, res) => {
 });
 
 // =======================
-// 🔹 更新任务 (支持文件上传 + ObjectId 验证)
+// 🔹Update Task (Supports File Upload + ObjectId Validation)
 // =======================
 router.put(
   "/:id",
@@ -93,7 +93,8 @@ router.put(
       });
       if (!task) return res.status(404).json({ message: "Task not found" });
 
-      // 🔹 处理文本字段
+      // 🔹 Handle text part
+
       const {
         title,
         masteryLevel,
@@ -139,12 +140,12 @@ router.put(
         req.files?.images?.map((f) => `/uploads/images/${f.filename}`) || [];
       task.imagePaths = [...(task.imagePaths || []), ...newImages];
 
-      // 🔹 处理新上传音频
+      // 🔹 Handle new recording
       const newAudios =
         req.files?.audios?.map((f) => `/uploads/audios/${f.filename}`) || [];
       task.audioPaths = [...(task.audioPaths || []), ...newAudios];
 
-      // 🔹 保存
+      // 🔹 save
       await task.save();
 
       const updatedTask = await TaskItem.findById(task._id)
@@ -159,7 +160,7 @@ router.put(
   }
 );
 // =======================
-// 🔹 删除图片（按索引）
+// 🔹 Delete image by index
 // =======================
 router.delete("/:id/image/:index", protect, async (req, res) => {
   try {
@@ -175,25 +176,25 @@ router.delete("/:id/image/:index", protect, async (req, res) => {
     if (isNaN(index) || index < 0 || index >= (task.imagePaths?.length || 0))
       return res.status(400).json({ message: "索引无效" });
 
-    // 删除物理文件
+    // delete the phyquel files
     const filePath = task.imagePaths[index];
     if (filePath?.startsWith("/uploads/")) {
       const fullPath = path.join(__dirname, "..", filePath);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     }
 
-    // 删除数组中的元素
+    // delete the element in the array
     task.imagePaths.splice(index, 1);
     await task.save();
 
-    res.json({ imagePaths: task.imagePaths }); // ✅ 返回 JSON
+    res.json({ imagePaths: task.imagePaths }); // ✅ return JSON
   } catch (err) {
     console.error("❌ Error deleting image:", err);
-    res.status(500).json({ message: "删除失败: " + err.message });
+    res.status(500).json({ message: "Delete failure: " + err.message });
   }
 });
 // =======================
-// 🔹 删除音频（按索引）
+// 🔹Delete recording by index
 // =======================
 router.delete("/:id/audio/:index", protect, async (req, res) => {
   try {
@@ -209,26 +210,26 @@ router.delete("/:id/audio/:index", protect, async (req, res) => {
     if (isNaN(index) || index < 0 || index >= (task.audioPaths?.length || 0))
       return res.status(400).json({ message: "索引无效" });
 
-    // 找到该音频文件
+    // find the recording files
     const filePath = task.audioPaths[index];
 
-    // 删除物理文件（如果存在）
+    // delete the physiquel files
     if (filePath?.startsWith("/uploads/")) {
       const fullPath = path.join(__dirname, "..", filePath);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     }
 
-    // 删除数组中对应的音频路径
+    // delete the path in array
     task.audioPaths.splice(index, 1);
     await task.save();
 
     res.json({
-      message: "音频删除成功",
+      message: "recording delete success",
       audioPaths: task.audioPaths,
     });
   } catch (err) {
     console.error("❌ Error deleting audio:", err);
-    res.status(500).json({ message: "删除失败: " + err.message });
+    res.status(500).json({ message: "delete failure: " + err.message });
   }
 });
 

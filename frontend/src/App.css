@@ -1,5 +1,73 @@
+/* Ensure the entire app container uses flex layout */
 .App {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* Important: ensure container takes at least full viewport height */
+}
+
+/* Wider navigation bar */
+.navbar {
+  background-color: #07c160;
+  padding: 15px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+  min-height: 60px;
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px;
+}
+
+.nav-logo {
+  color: white;
+  font-size: 26px;
+  font-weight: bold;
+  margin: 0;
+}
+
+/* Navigation links styling */
+.nav-links {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+/* Main content area */
+.main-content {
+  margin-top: 80px;
+  padding: 30px;
+  min-height: calc(100vh - 140px); /* Subtract navbar and footer height */
+}
+
+/* App container */
+.App {
+  text-align: center;
+  position: relative;
+  min-height: 100vh;
 }
 
 .App-logo {
@@ -15,7 +83,7 @@
 
 .App-header {
   background-color: #282c34;
-  min-height: 100vh;
+  min-height: 150vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -24,8 +92,22 @@
   color: white;
 }
 
-.App-link {
-  color: #61dafb;
+/* Footer fixed at viewport bottom */
+.footer {
+  background-color: #eff1f0;
+  color: rgb(112, 111, 111);
+  text-align: center;
+  padding: 5px 0;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+.footer-text {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 @keyframes App-logo-spin {
@@ -35,8 +117,4 @@
   to {
     transform: rotate(360deg);
   }
-}
-/* 整个播放器区域背景淡绿 */
-audio::-webkit-media-controls-timeline {
-  height: 6px;
 }
