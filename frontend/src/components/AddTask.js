@@ -7,47 +7,56 @@ const AddTask = () => {
   const [title, setTitle] = useState("");
   const [taskType, setTaskType] = useState("");
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState([]);
+  const [taskTypes, setTaskTypes] = useState([]);
   const [message, setMessage] = useState("");
 
-  // Hardcoded task types (same as Dashboard)
-  const taskTypes = ["Task1", "Task2", "Task3"];
-
-  // Fetch categories from backend (optional)
-  // If you already have them in your DB, this loads them
+  // Load TaskTypes from DB
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const loadTypes = async () => {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/tasks/types/all", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/categories", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setCategories(data);
-        }
-      } catch (err) {
-        console.error("Fetch categories error:", err);
-      }
+      const data = await res.json();
+      setTaskTypes(data);
     };
 
-    fetchCategories();
+    loadTypes();
   }, []);
 
-  // Submit new task
   const handleSubmit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
-    if (!title.trim()) {
-      setMessage("Task title is required.");
+    if (!title || !taskType || !category) {
+      setMessage("All fields are required.");
       return;
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/tasks", {
+      // 1️⃣ Create or reuse category
+      const catRes = await fetch("http://localhost:5000/api/tasks/categories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: category,
+          taskType: taskType, // ObjectId!
+        }),
+      });
+
+      const createdCategory = await catRes.json();
+
+      if (!createdCategory._id) {
+        setMessage("Failed to create category.");
+        return;
+      }
+
+      // 2️⃣ Create task
+      const taskRes = await fetch("http://localhost:5000/api/tasks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,18 +65,18 @@ const AddTask = () => {
         body: JSON.stringify({
           title,
           taskType,
-          category,
+          category: createdCategory._id,
         }),
       });
 
-      if (res.ok) {
+      if (taskRes.ok) {
         navigate("/dashboard");
       } else {
-        setMessage("Failed to add task.");
+        setMessage("Failed to create task.");
       }
     } catch (err) {
-      console.error("Add task error:", err);
-      setMessage("Error adding task.");
+      console.error(err);
+      setMessage("Error creating task.");
     }
   };
 
@@ -80,7 +89,7 @@ const AddTask = () => {
       <form onSubmit={handleSubmit}>
         {/* Task Title */}
         <div style={{ marginBottom: "12px" }}>
-          <label>Task Title:</label>
+          <label>Task Title</label>
           <br />
           <input
             type="text"
@@ -91,41 +100,35 @@ const AddTask = () => {
           />
         </div>
 
-        {/* Task Type */}
+        {/* Task Type Dropdown */}
         <div style={{ marginBottom: "12px" }}>
-          <label>Task Type:</label>
+          <label>Task Type</label>
           <br />
           <select
             value={taskType}
             onChange={(e) => setTaskType(e.target.value)}
             style={{ padding: "6px", width: "300px" }}
           >
-            <option value="">Select Type</option>
+            <option value="">Select Task Type</option>
             {taskTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
+              <option key={t._id} value={t._id}>
+                {t.name}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Category */}
+        {/* Category Input */}
         <div style={{ marginBottom: "12px" }}>
-          <label>Category:</label>
+          <label>Category</label>
           <br />
-          <select
+          <input
+            type="text"
+            placeholder="Enter category name"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             style={{ padding: "6px", width: "300px" }}
-          >
-            <option value="">Select Category</option>
-
-            {categories.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <button type="submit" style={{ padding: "10px 16px" }}>
