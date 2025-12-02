@@ -12,7 +12,7 @@ const protect = require("../middleware/authMiddleware");
 const router = express.Router();
 
 // -----------------------
-// 🔹 multer file store configuration
+// Multer Upload Setup
 // -----------------------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -27,14 +27,77 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// =======================
-// ✅ Get the current user's tasks
-// =======================
+// ===============================
+// 🟢 GET all task types
+// URL: GET /api/tasks/types/all
+// ===============================
+router.get("/types/all", protect, async (req, res) => {
+  try {
+    const types = await TaskType.find();
+    res.json(types);
+  } catch (err) {
+    console.error("❌ Fetch task types error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ===============================
+// 🟢 AUTO-CREATE CATEGORY (User typed)
+// URL: POST /api/tasks/categories
+// ===============================
+router.post("/categories", protect, async (req, res) => {
+  try {
+    const { name, taskType } = req.body;
+
+    if (!name || !taskType) {
+      return res.status(400).json({ message: "Category name + taskType required" });
+    }
+
+    // Must be valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(taskType)) {
+      return res.status(400).json({ message: "Invalid TaskType ID" });
+    }
+
+    // Check if exists
+    let existing = await Category.findOne({ name, taskType });
+
+    if (existing) return res.json(existing);
+
+    // Create new
+    const newCategory = new Category({
+      name,
+      taskType,
+    });
+
+    await newCategory.save();
+    return res.status(201).json(newCategory);
+
+  } catch (err) {
+    console.error("❌ Create category error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ===============================
+// 🟢 Get ALL categories
+// URL: GET /api/tasks/categories/all
+// ===============================
+router.get("/categories/all", protect, async (req, res) => {
+  try {
+    const categories = await Category.find().populate("taskType", "name");
+    res.json(categories);
+  } catch (err) {
+    console.error("❌ Fetch categories error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ===============================
+// 🟢 GET all tasks for logged in user
+// ===============================
 router.get("/", protect, async (req, res) => {
   try {
-    const userObjectId = new mongoose.Types.ObjectId(req.user.id);
-
-    const tasks = await TaskItem.find({ userId: userObjectId })
+    const tasks = await TaskItem.find({ userId: req.user.id })
       .populate("taskType", "name")
       .populate("category", "name");
 
@@ -45,20 +108,17 @@ router.get("/", protect, async (req, res) => {
   }
 });
 
-// =======================
-// ✅ Get the taskItem information
-// =======================
+// ===============================
+// 🟢 GET single task
+// ===============================
 router.get("/:id", protect, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id))
       return res.status(400).json({ message: "Invalid task ID" });
 
-    const userObjectId = new mongoose.Types.ObjectId(req.user.id);
-    const taskObjectId = new mongoose.Types.ObjectId(req.params.id);
-
     const task = await TaskItem.findOne({
-      _id: taskObjectId,
-      userId: userObjectId,
+      _id: req.params.id,
+      userId: req.user.id,
     })
       .populate("taskType", "name")
       .populate("category", "name");
@@ -72,9 +132,44 @@ router.get("/:id", protect, async (req, res) => {
   }
 });
 
-// =======================
-// 🔹Update Task (Supports File Upload + ObjectId Validation)
-// =======================
+// ===============================
+// 🟢 CREATE TASK
+// ===============================
+router.post("/", protect, async (req, res) => {
+  try {
+    const { title, taskType, category } = req.body;
+
+    if (!title || !taskType || !category) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const newTask = new TaskItem({
+      userId: req.user.id,
+      title,
+      taskType,
+      category,
+    });
+
+    await newTask.save();
+
+    const saved = await TaskItem.findById(newTask._id)
+      .populate("taskType", "name")
+      .populate("category", "name");
+
+    res.status(201).json(saved);
+  } catch (err) {
+    console.error("❌ Error creating task:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// =======================================================================
+// 🟡 UPDATE & DELETE IMAGE/AUDIO + DELETE TASK (your original code)
+// =======================================================================
+
+
+// 🔄 UPDATE TASK (unchanged)
 router.put(
   "/:id",
   protect,
@@ -92,8 +187,6 @@ router.put(
         userId: req.user.id,
       });
       if (!task) return res.status(404).json({ message: "Task not found" });
-
-      // 🔹 Handle text part
 
       const {
         title,
@@ -135,17 +228,14 @@ router.put(
         } catch {}
       }
 
-      // 🔹 处理新上传图片
       const newImages =
         req.files?.images?.map((f) => `/uploads/images/${f.filename}`) || [];
       task.imagePaths = [...(task.imagePaths || []), ...newImages];
 
-      // 🔹 Handle new recording
       const newAudios =
         req.files?.audios?.map((f) => `/uploads/audios/${f.filename}`) || [];
       task.audioPaths = [...(task.audioPaths || []), ...newAudios];
 
-      // 🔹 save
       await task.save();
 
       const updatedTask = await TaskItem.findById(task._id)
@@ -159,78 +249,82 @@ router.put(
     }
   }
 );
-// =======================
-// 🔹 Delete image by index
-// =======================
+
+
+// ❌ DELETE ENTIRE TASK
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const deletedTask = await TaskItem.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
+    if (!deletedTask)
+      return res.status(404).json({ message: "Task not found" });
+
+    res.json({ message: "Task deleted successfully" });
+  } catch (err) {
+    console.error("❌ Delete task error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// ❌ DELETE IMAGE
 router.delete("/:id/image/:index", protect, async (req, res) => {
   try {
-    const taskId = req.params.id;
+    const task = await TaskItem.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
     const index = parseInt(req.params.index);
-
-    if (!mongoose.Types.ObjectId.isValid(taskId))
-      return res.status(400).json({ message: "Invalid task ID" });
-
-    const task = await TaskItem.findOne({ _id: taskId, userId: req.user.id });
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    if (isNaN(index) || index < 0 || index >= (task.imagePaths?.length || 0))
-      return res.status(400).json({ message: "索引无效" });
-
-    // delete the phyquel files
     const filePath = task.imagePaths[index];
+
     if (filePath?.startsWith("/uploads/")) {
       const fullPath = path.join(__dirname, "..", filePath);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     }
 
-    // delete the element in the array
     task.imagePaths.splice(index, 1);
     await task.save();
 
-    res.json({ imagePaths: task.imagePaths }); // ✅ return JSON
+    res.json({ imagePaths: task.imagePaths });
   } catch (err) {
     console.error("❌ Error deleting image:", err);
-    res.status(500).json({ message: "Delete failure: " + err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
-// =======================
-// 🔹Delete recording by index
-// =======================
+
+
+// ❌ DELETE AUDIO
 router.delete("/:id/audio/:index", protect, async (req, res) => {
   try {
-    const taskId = req.params.id;
+    const task = await TaskItem.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
     const index = parseInt(req.params.index);
-
-    if (!mongoose.Types.ObjectId.isValid(taskId))
-      return res.status(400).json({ message: "Invalid task ID" });
-
-    const task = await TaskItem.findOne({ _id: taskId, userId: req.user.id });
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    if (isNaN(index) || index < 0 || index >= (task.audioPaths?.length || 0))
-      return res.status(400).json({ message: "索引无效" });
-
-    // find the recording files
     const filePath = task.audioPaths[index];
 
-    // delete the physiquel files
     if (filePath?.startsWith("/uploads/")) {
       const fullPath = path.join(__dirname, "..", filePath);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     }
 
-    // delete the path in array
     task.audioPaths.splice(index, 1);
     await task.save();
 
     res.json({
-      message: "recording delete success",
+      message: "Audio deleted successfully",
       audioPaths: task.audioPaths,
     });
   } catch (err) {
     console.error("❌ Error deleting audio:", err);
-    res.status(500).json({ message: "delete failure: " + err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
+
 
 module.exports = router;

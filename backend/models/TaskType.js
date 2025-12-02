@@ -8,18 +8,9 @@ const mongoose = require("mongoose");
  * Task2: Scenario dialogues
  * Task3: Topic argumentation
  */
-const taskTypeSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      enum: ["Task1", "Task2", "Task3"],
-    },
-    description: { type: String },
-  },
-  { timestamps: true }
-);
 
-const TaskType = mongoose.model("TaskType", taskTypeSchema);
+const taskTypeSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+});
 
-module.exports = TaskType;
+module.exports = mongoose.model("TaskType", taskTypeSchema);

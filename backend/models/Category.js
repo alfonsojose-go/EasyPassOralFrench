@@ -5,10 +5,13 @@ const mongoose = require("mongoose");
  * Category Schema
  * Represents subcategories under each task type
  */
+
 const categorySchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     description: { type: String },
+
+    // 🔥 Links to TaskType in DB
     taskType: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TaskType",
@@ -19,5 +22,4 @@ const categorySchema = new mongoose.Schema(
 );
 
 const Category = mongoose.model("Category", categorySchema);
-
 module.exports = Category;

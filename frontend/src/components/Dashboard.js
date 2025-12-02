@@ -7,16 +7,22 @@ const Dashboard = () => {
   const [selectedType, setSelectedType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Inline editing states
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editedTitle, setEditedTitle] = useState("");
+
   const navigate = useNavigate();
 
-  // Predefined TaskType list to filter tasks by type
+  // Hardcoded task types (can later be dynamic)
   const taskTypes = ["Task1", "Task2", "Task3"];
 
-  // Fetch all tasks when component loads
-  // Protects route: if no token, redirect to login page
+  // -----------------------------------------
+  // Fetch Tasks + Auth Check
+  // -----------------------------------------
   useEffect(() => {
     const token = localStorage.getItem("token");
-    console.log("🔹 Token:", token);
 
     if (!token) {
       navigate("/login");
@@ -25,13 +31,12 @@ const Dashboard = () => {
 
     const fetchTasks = async () => {
       try {
-        // Call backend API to fetch tasks
         const res = await fetch("http://localhost:5000/api/tasks", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        // If token expired or invalid, force user logout
         if (res.status === 401) {
+          localStorage.removeItem("token");
           navigate("/login");
           return;
         }
@@ -40,64 +45,135 @@ const Dashboard = () => {
         setTasks(data);
         setFilteredTasks(data);
 
-        // Handle empty task list
         if (!data || data.length === 0) {
           setMessage("No tasks found for this user.");
         }
       } catch (err) {
         console.error("Fetch error:", err);
         setMessage("Error fetching tasks");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchTasks();
   }, [navigate]);
 
-  // Automatically update list when filter changes
+  // -----------------------------------------
+  // Filtering Logic
+  // -----------------------------------------
   useEffect(() => {
     let temp = [...tasks];
 
-    // Filter by task type
     if (selectedType) {
       temp = temp.filter((t) => t.taskType?.name === selectedType);
     }
 
-    // Filter by task category
     if (selectedCategory) {
       temp = temp.filter((t) => t.category?._id === selectedCategory);
     }
 
-    // Update filtered list after every filter change
     setFilteredTasks(temp);
   }, [selectedType, selectedCategory, tasks]);
 
-  // Calculates unique categories based on selected task type
-  // Used to dynamically update category dropdown
+  // -----------------------------------------
+  // Delete Task Handler
+  // -----------------------------------------
+  const handleDelete = async (id) => {
+    const token = localStorage.getItem("token");
+
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/tasks/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setTasks((prev) => prev.filter((t) => t._id !== id));
+      } else {
+        alert("Failed to delete task");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
+
+  // -----------------------------------------
+  // SAVE EDITED TASK TITLE
+  // -----------------------------------------
+  const handleEditSave = async (id) => {
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/tasks/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: editedTitle }),
+      });
+
+      if (res.ok) {
+        setTasks((prev) =>
+          prev.map((t) => (t._id === id ? { ...t, title: editedTitle } : t))
+        );
+        setEditingTaskId(null);
+      } else {
+        alert("Failed to update title");
+      }
+    } catch (err) {
+      console.error("Edit error:", err);
+    }
+  };
+
+  // -----------------------------------------
+  // Category dropdown options
+  // -----------------------------------------
   const categoriesForType = selectedType
     ? tasks
         .filter((t) => t.taskType?.name === selectedType)
         .map((t) => t.category)
-        // Avoid duplicates based on category ID
         .filter((v, i, a) => v && a.findIndex((c) => c._id === v._id) === i)
     : [];
 
-  // Navigate to the task detail page
   const openTask = (id) => {
     navigate(`/task/${id}`);
   };
+
+  // -----------------------------------------
+  // Loading state
+  // -----------------------------------------
+  if (loading) {
+    return <p>Loading tasks...</p>;
+  }
 
   return (
     <div>
       <h1>My Tasks</h1>
 
-      {/* Dropdown filters for TaskType and Category */}
+      {/* Add Task Button */}
+      <button
+        onClick={() => navigate("/add-task")}
+        style={{
+          marginBottom: "20px",
+          padding: "8px 12px",
+          cursor: "pointer",
+        }}
+      >
+        ➕ Add Task
+      </button>
+
+      {/* Filters */}
       <div style={{ marginBottom: "20px" }}>
         <label>Task Type: </label>
         <select
           value={selectedType}
           onChange={(e) => {
             setSelectedType(e.target.value);
-            setSelectedCategory(""); // Reset category when type changes
+            setSelectedCategory("");
           }}
         >
           <option value="">All Types</option>
@@ -124,21 +200,73 @@ const Dashboard = () => {
 
       {message && <p>{message}</p>}
 
-      {/* Render filtered task list */}
+      {/* Render Task List */}
       {filteredTasks.map((task) => (
         <div
           key={task._id}
-          style={{ border: "1px solid #ccc", margin: "10px", padding: "10px" }}
+          style={{
+            border: "1px solid #ccc",
+            margin: "10px",
+            padding: "10px",
+            borderRadius: "6px",
+          }}
         >
-          <b>{task.title}</b> - {task.taskType?.name || "No type"} /{" "}
-          {task.category?.name || "No category"}
-          {/* Click to open task detail page */}
-          <button
-            onClick={() => openTask(task._id)}
-            style={{ marginLeft: "10px" }}
-          >
-            Start Task
-          </button>
+          {/* If editing this task */}
+          {editingTaskId === task._id ? (
+            <>
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+              />
+
+              <button
+                onClick={() => handleEditSave(task._id)}
+                style={{ marginLeft: "10px" }}
+              >
+                Save
+              </button>
+
+              <button
+                onClick={() => setEditingTaskId(null)}
+                style={{ marginLeft: "10px", color: "gray" }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Normal Mode */}
+              <b>{task.title}</b> — {task.taskType?.name || "No type"} /{" "}
+              {task.category?.name || "No category"}
+
+              <button
+                onClick={() => openTask(task._id)}
+                style={{ marginLeft: "10px" }}
+              >
+                Start
+              </button>
+
+              {/* Inline Edit Button */}
+              <button
+                onClick={() => {
+                  setEditingTaskId(task._id);
+                  setEditedTitle(task.title);
+                }}
+                style={{ marginLeft: "10px" }}
+              >
+                Edit
+              </button>
+
+              {/* Delete Button */}
+              <button
+                onClick={() => handleDelete(task._id)}
+                style={{ marginLeft: "10px", color: "red" }}
+              >
+                Delete
+              </button>
+            </>
+          )}
         </div>
       ))}
     </div>
