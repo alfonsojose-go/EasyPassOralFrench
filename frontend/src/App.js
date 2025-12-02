@@ -53,6 +53,7 @@ function App() {
 
             {/* 🔹 Add Task page: form to add a new task */}
             <Route path="/add-task" element={<AddTask />} />
+            <Route path="/payment" element={<Payment />} />
           </Routes>
         </main>
 
