@@ -1,8 +1,10 @@
 // server.js
+const dotenv = require("dotenv");
+dotenv.config();
 const express = require("express");
 const path = require("path");
-const dotenv = require("dotenv");
 const cors = require("cors");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // Database
 const connectDB = require("./config/db");
@@ -12,7 +14,7 @@ const userRoutes = require("./routes/LoginRoutes");
 const taskRoutes = require("./routes/TaskRoutes");
 const listRoutes = require("./routes/ListRoutes");
 
-dotenv.config();
+
 
 const app = express();
 
