@@ -328,10 +328,19 @@ const PaymentForm = () => {
     <br />
         {/* Amount Section */}
         <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Payment Amount </span>
-            <span className="text-lg font-semibold text-gray-900">${amount}</span>
-          </div>
+          <div>
+              <label className="block text-xs font-medium text-gray-700 mb-2">
+                Payment Amount (USD) 
+              </label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="10.00"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+                required
+              />
+            </div>
           <div className="text-xs text-gray-500">
             <p>USD • Secure transaction</p>
           </div>
