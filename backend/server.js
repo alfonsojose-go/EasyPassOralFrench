@@ -50,6 +50,9 @@ app.post("/api/grammar-check", async (req, res) => {
   }
 });
 
+
+
+
 // Base route
 app.get("/", (req, res) => {
   res.send("API is running...");
