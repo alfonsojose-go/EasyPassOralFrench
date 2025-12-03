@@ -3,6 +3,7 @@ const express = require("express");
 const path = require("path");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Database
 const connectDB = require("./config/db");
@@ -48,6 +49,74 @@ app.post("/api/grammar-check", async (req, res) => {
   }
 });
 
+
+// Payment routes
+// Create Payment Intent
+app.post('/create-payment-intent', async (req, res) => {
+  try {
+    const { amount, email, paymentMethodId, metadata } = req.body;
+
+    // Create or retrieve customer
+    let customer;
+    const customers = await stripe.customers.list({
+      email: email,
+      limit: 1
+    });
+
+    if (customers.data.length > 0) {
+      customer = customers.data[0];
+    } else {
+      customer = await stripe.customers.create({
+        email: email,
+        name: metadata.customer_name,
+        metadata: metadata
+      });
+    }
+
+    // Create Payment Intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'usd',
+      customer: customer.id,
+      payment_method: paymentMethodId,
+      confirm: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
+      },
+      metadata: {
+        customer_email: email,
+        customer_name: metadata.customer_name
+      }
+    });
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send receipt email (optional)
+app.post('/send-receipt', async (req, res) => {
+  try {
+    const { email, amount, paymentIntentId } = req.body;
+    
+    // Here you would integrate with your email service
+    // For example, using SendGrid, Mailgun, etc.
+    console.log(`Receipt sent to ${email} for payment ${paymentIntentId} ($${amount})`);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error sending receipt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Base route
 app.get("/", (req, res) => {
   res.send("API is running...");
@@ -67,3 +136,6 @@ connectDB();  // connect AFTER declaring routes is fine
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+
+
