@@ -13,6 +13,7 @@ import Dashboard from "./components/Dashboard";
 import TaskDetails from "./components/TaskDetails";
 import "./App.css";
 import AddTask from "./components/AddTask";
+import Payment from "./components/Payment";
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
 
             {/* 🔹 Add Task page: form to add a new task */}
             <Route path="/add-task" element={<AddTask />} />
+            <Route path="/payment" element={<Payment />} />
           </Routes>
         </main>
 

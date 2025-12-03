@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import LimitedAddButton from "./LimitedAddButton";
 //import GrammarTextIntegration from "./GrammarTextIntegration";
 import "../App.css"; // style
+import LoadPayment from "./LoadPayment";
 
 const TaskDetails = () => {
   const { id } = useParams();
@@ -1625,6 +1626,7 @@ const TaskDetails = () => {
       <div style={styles.left}>
         <h3 style={{ color: "white" }}>Task Navigation</h3>
         {renderTree()}
+        <LoadPayment />
       </div>
 
       {/* Center content */}
