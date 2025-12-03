@@ -8,7 +8,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 
 // Replace with your publishable key from Stripe Dashboard
-const stripePromise = loadStripe('your_publishable_key_here');
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
 const Payment = () => {
   return (
