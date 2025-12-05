@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
   Elements,
-  CardElement,
   useStripe,
-  useElements
+  useElements,
+  CardNumberElement, 
+  CardExpiryElement, 
+  CardCvcElement
 } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe,  } from '@stripe/stripe-js';
 
 // Replace with your publishable key from Stripe Dashboard
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
@@ -20,133 +22,167 @@ const Payment = () => {
 
 const PaymentForm = () => {
   const [amount, setAmount] = useState('10.00');
-  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState('');
   const [name, setName] = useState('');
-  const [address, setAddress] = useState({
-    line1: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    country: 'US'
-  });
 
   const stripe = useStripe();
   const elements = useElements();
 
-  const cardElementOptions = {
+  const cardNumberElementOptions = {
     style: {
       base: {
-        fontSize: '16px',
-        color: '#32325d',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        '::placeholder': {
-          color: '#a0aec0',
+        fontSize: "18px",
+        color: "#111827",
+        fontFamily: "monospace, monospace",
+        fontWeight: "600",
+        "::placeholder": {
+          color: "#9CA3AF",
+          fontWeight: "400",
         },
-
       },
       invalid: {
-        color: '#e53e3e',
-        iconColor: '#e53e3e',
+        color: "#EF4444",
       },
     },
-    hidePostalCode: true,
+  };
+
+  const cardExpiryElementOptions = {
+    style: {
+      base: {
+        fontSize: "18px",
+        color: "#111827",
+        fontFamily: "monospace, monospace",
+        fontWeight: "600",
+        "::placeholder": {
+          color: "#9CA3AF",
+          fontWeight: "400",
+        },
+      },
+      invalid: {
+        color: "#EF4444",
+      },
+    },
+  };
+
+  const cardCvcElementOptions = {
+    style: {
+      base: {
+        fontSize: "18px",
+        color: "#111827",
+        fontFamily: "monospace, monospace",
+        fontWeight: "600",
+        "::placeholder": {
+          color: "#9CA3AF",
+          fontWeight: "400",
+        },
+      },
+      invalid: {
+        color: "#EF4444",
+      },
+    },
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (!stripe || !elements) {
+    return;
+  }
+
+  setLoading(true);
+  setStatus(null);
+  setMessage('');
+
+  try {
+    // Get the card element
+    const cardNumberElement = elements.getElement(CardNumberElement);
     
-    if (!stripe || !elements) {
-      return;
+    if (!cardNumberElement) {
+      throw new Error('Card details not properly loaded');
     }
 
-    setLoading(true);
-    setStatus(null);
-    setMessage('');
+    // Step 1: Get client secret from backend
+    const response = await fetch('http://localhost:5000/create-payment-intent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: Math.round(parseFloat(amount) * 100), // Convert to cents
+        metadata: {
+          customer_name: name,
+        },
+      }),
+    });
 
-    try {
-      // Step 1: Create Payment Method
-      const cardElement = elements.getElement(CardElement);
-      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
-        type: 'card',
-        card: cardElement,
-        billing_details: {
-          name: name,
-          email: email,
-          address: {
-            line1: address.line1,
-            city: address.city,
-            state: address.state,
-            postal_code: address.postal_code,
-            country: address.country,
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to create payment intent');
+    }
+
+    // Step 2: Confirm the payment on the frontend
+    const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+      data.clientSecret,
+      {
+        payment_method: {
+          card: cardNumberElement,
+          billing_details: {
+            name: name,
           },
         },
-      });
-
-      if (stripeError) {
-        throw new Error(stripeError.message);
+        return_url: window.location.origin, // Optional
       }
+    );
 
-      // Step 2: Call your backend to create a Payment Intent
-      const response = await fetch('http://localhost:5000/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: Math.round(parseFloat(amount) * 100), // Convert to cents
-          email: email,
-          paymentMethodId: paymentMethod.id,
-          metadata: {
-            customer_name: name,
-          },
-        }),
-      });
+    if (confirmError) {
+      throw new Error(confirmError.message);
+    }
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Payment failed');
-      }
-
-      // Step 3: Confirm the payment
-      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-        data.clientSecret
-      );
-
-      if (confirmError) {
-        throw new Error(confirmError.message);
-      }
-
-      if (paymentIntent.status === 'succeeded') {
+    // Handle payment intent status
+    switch (paymentIntent.status) {
+      case 'succeeded':
         setStatus('success');
         setMessage('Payment successful! Your transaction has been processed.');
         
-        // Optional: Send receipt email via your backend
+        // Optional: Send receipt email
         await fetch('http://localhost:5000/send-receipt', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: email,
             amount: amount,
             paymentIntentId: paymentIntent.id,
           }),
         });
-      } else {
-        throw new Error('Payment not successful');
-      }
-    } catch (error) {
-      setStatus('error');
-      setMessage(error.message || 'Payment failed. Please try again.');
-      console.error('Payment error:', error);
-    } finally {
-      setLoading(false);
+        break;
+        
+      case 'processing':
+        setStatus('info');
+        setMessage('Your payment is processing. We\'ll update you when complete.');
+        break;
+        
+      case 'requires_payment_method':
+        setStatus('error');
+        setMessage('Payment failed. Please try another payment method.');
+        break;
+        
+      default:
+        setStatus('error');
+        setMessage('Something went wrong. Please try again.');
     }
-  };
+    
+  } catch (error) {
+    setStatus('error');
+    setMessage(error.message || 'Payment failed. Please try again.');
+    console.error('Payment error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // SVG Icons
   const CreditCardIcon = () => (
@@ -223,199 +259,158 @@ const PaymentForm = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-  <div className="max-w-md mx-auto">
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-      {/* Header */}
-      <div className="px-8 pt-8 pb-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Payment Details</h1>
-            <p className="text-gray-600 text-sm mt-1">Enter your credit card information</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-6 bg-gray-300 rounded-sm"></div>
-            <div className="w-10 h-6 bg-gray-200 rounded-sm"></div>
-            <div className="w-10 h-6 bg-gray-100 rounded-sm"></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Payment Form */}
-      <form onSubmit={handleSubmit} className="px-8 pb-8">
-        {/* Card Details Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <label className="block text-sm font-medium text-gray-900">
-              Card Information
-            </label>
-            <span className="text-xs text-gray-500">Required</span>
-          </div>
-          
-          
-        </div>
-
-        {/* Billing Details Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-900">Billing Information</h3>
-            <span className="text-xs text-gray-500">Required</span>
-          </div>
-          
-          {/* Name */}
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-700 mb-2">
-              Full Name 
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="John M. Smith"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-              required
-            />
-          </div>
-
-          {/* Email */}
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-700 mb-2">
-              Email Address 
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="john.smith@email.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-              required
-            />
-          </div>
-
-          {/* Country and Postal Code */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Country 
-              </label>
-              <select
-                value={address.country}
-                onChange={(e) => setAddress({...address, country: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none bg-white"
-                required
-              >
-                <option value="">Select country</option>
-                <option value="US">United States</option>
-                <option value="CA">Canada</option>
-                <option value="GB">United Kingdom</option>
-                <option value="AU">Australia</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Postal Code 
-              </label>
-              <input
-                type="text"
-                value={address.postal_code}
-                onChange={(e) => setAddress({...address, postal_code: e.target.value})}
-                placeholder="94103"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-                required
-              />
-            </div>
-          </div>
-        </div>
-    <br />
-        {/* Amount Section */}
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Payment Amount (USD) 
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="10.00"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-                required
-              />
-            </div>
-          <div className="text-xs text-gray-500">
-            <p>USD • Secure transaction</p>
-          </div>
-        </div>
-
-        {/* Status Messages */}
-        {status && (
-          <div className={`mb-6 p-4 rounded-lg border ${
-            status === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center gap-3">
-              {status === 'success' ? (
-                <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
-              ) : (
-                <AlertCircleIcon className="w-5 h-5 flex-shrink-0" />
-              )}
-              <p className="text-sm">{message}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Card Details - Using existing CardElement */}
-          <div className="mb-4">
-            <div className="relative">
-              <span className="absolute left-3 top-3.5 text-gray-400">
-                <CreditCardIcon />
-              </span>
-              <div className="pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600">
-                <CardElement options={cardElementOptions} />
+      <div className="max-w-md mx-auto">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+          {/* Header */}
+          <div className="px-8 pt-8 pb-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Payment Details
+                </h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-6 bg-gray-300 rounded-sm"></div>
+                <div className="w-10 h-6 bg-gray-200 rounded-sm"></div>
+                <div className="w-10 h-6 bg-gray-100 rounded-sm"></div>
               </div>
             </div>
           </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading || !stripe}
-          className="w-full bg-gray-900 text-white py-3.5 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
-        >
-          {loading ? (
-            <>
-              <LoaderIcon />
-              Processing Payment...
-            </>
-          ) : (
-            <>Complete Payment • ${amount}</>
-          )}
-        </button>
+          {/* Payment Form */}
+          <form onSubmit={handleSubmit} className="px-8 pb-8">
+              {/* Card Details Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-900">
+                    Card Information 
+                  </label>
+                </div>
 
-        {/* Security Footer */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="flex items-center justify-center gap-2 text-gray-600 text-xs">
-            <span>🔒</span>
-            <span>Secured by</span>
-            <span className="font-semibold">Stripe</span>
-            <span className="mx-1">•</span>
-            <span>PCI DSS compliant</span>
-          </div>
-          <p className="text-center text-xs text-gray-500 mt-3">
-            Your payment information is encrypted and never stored on our servers.
-          </p>
-        </div>
+                {/* Card Details - Using separate Stripe elements */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <span className="absolute left-3 top-3.5 text-gray-400">
+                      <CreditCardIcon />
+                    </span>
+                    <div className="space-y-4">
+                      <div className="pl-10 pr-4 py-3 border border-black rounded-lg focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600">
+                        <span className='absolute left-0 top-3.5 text-gray-400'>Card Number <CardNumberElement options={cardNumberElementOptions} /></span>
+                      </div>
 
-        {/* Test Card Notice */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-          <p className="text-xs text-blue-800">
-            <span className="font-medium">Test Mode:</span> 4242 4242 4242 4242 • 12/34 • 123
-          </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="min-w-0 pl-10 pr-4 py-3 border border-black rounded-lg focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600">
+                          <span className='absolute left-0 top-3.5 text-gray-400'>Expiry <CardExpiryElement
+                            options={cardExpiryElementOptions}
+                          /></span>
+                        </div>
+
+                        <div className="min-w-0 pl-10 pr-4 py-3 border border-black rounded-lg focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600">
+                          <span className='absolute left-0 top-3.5 text-gray-400'>CVC <CardCvcElement options={cardCvcElementOptions} /></span>
+                        </div>
+                      </div>
+
+                      {/* Name */}
+                      <div className="mb-4">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Name on Card
+                        </label>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="John M. Smith"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>{" "}
+              {/* Closing div for Card Details Section */}
+              {/* Amount Section */}
+              <div className="mb-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Payment Amount (USD)
+                  </label>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="10.00"
+                    step="0.01"
+                    min="0.50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="text-xs text-gray-500 mt-2">
+                  <p>USD • Secure transaction</p>
+                </div>
+              </div>
+            {/* Closing div for Billing Information Section */}
+            {/* Status Messages */}
+            {status && (
+              <div
+                className={`mb-6 p-4 rounded-lg border ${
+                  status === "success"
+                    ? "bg-green-50 border-green-200 text-green-800"
+                    : "bg-red-50 border-red-200 text-red-800"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {status === "success" ? (
+                    <CheckCircleIcon />
+                  ) : (
+                    <AlertCircleIcon />
+                  )}
+                  <p className="text-sm">{message}</p>
+                </div>
+              </div>
+            )}
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading || !stripe}
+              className="w-full bg-gray-900 text-white py-3.5 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+            >
+              {loading ? (
+                <>
+                  <LoaderIcon />
+                  Processing Payment...
+                </>
+              ) : (
+                <>Complete Payment • ${amount}</>
+              )}
+            </button>
+            {/* Security Footer */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-center gap-2 text-gray-600 text-xs">
+                <span>🔒</span>
+                <span>Secured by</span>
+                <span className="font-semibold">Stripe</span>
+                <span className="mx-1">•</span>
+                <span>PCI DSS compliant</span>
+              </div>
+              <p className="text-center text-xs text-gray-500 mt-3">
+                Your payment information is encrypted and never stored on our
+                servers.
+              </p>
+            </div>
+            {/* Test Card Notice */}
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+              <p className="text-xs text-blue-800">
+                <span className="font-medium">Test Mode:</span> 4242 4242 4242
+                4242 • 12/34 • 123
+              </p>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
-  </div>
-</div>
   );
 };
 
