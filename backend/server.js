@@ -54,12 +54,11 @@ app.post("/api/grammar-check", async (req, res) => {
 // Create Payment Intent
 app.post('/create-payment-intent', async (req, res) => {
   try {
-    const { amount, email, paymentMethodId, metadata } = req.body;
+    const { amount, metadata } = req.body; // Remove paymentMethodId from here
 
     // Create or retrieve customer
     let customer;
     const customers = await stripe.customers.list({
-      email: email,
       limit: 1
     });
 
@@ -67,32 +66,30 @@ app.post('/create-payment-intent', async (req, res) => {
       customer = customers.data[0];
     } else {
       customer = await stripe.customers.create({
-        email: email,
         name: metadata.customer_name,
         metadata: metadata
       });
     }
 
-    // Create Payment Intent
+    // Create Payment Intent WITHOUT confirming it yet
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount,
       currency: 'usd',
       customer: customer.id,
-      payment_method: paymentMethodId,
-      confirm: true,
       automatic_payment_methods: {
         enabled: true,
         allow_redirects: 'never'
       },
       metadata: {
-        customer_email: email,
         customer_name: metadata.customer_name
       }
+
     });
 
     res.json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      customerId: customer.id // Optional: return customer ID
     });
   } catch (error) {
     console.error('Error creating payment intent:', error);
@@ -100,21 +97,6 @@ app.post('/create-payment-intent', async (req, res) => {
   }
 });
 
-// Send receipt email (optional)
-app.post('/send-receipt', async (req, res) => {
-  try {
-    const { email, amount, paymentIntentId } = req.body;
-    
-    // Here you would integrate with your email service
-    // For example, using SendGrid, Mailgun, etc.
-    console.log(`Receipt sent to ${email} for payment ${paymentIntentId} ($${amount})`);
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending receipt:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 
 // Base route
