@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import LimitedAddButton from "./LimitedAddButton";
 //import GrammarTextIntegration from "./GrammarTextIntegration";
 import "../App.css"; // style
-import LoadPayment from "./LoadPayment";
 
 const TaskDetails = () => {
   const { id } = useParams();
@@ -370,20 +369,211 @@ const TaskDetails = () => {
 
   if (loading) return <p>Loading...</p>;
   if (!task) return <p>Task not found</p>;
-
   // ==========================================================
   // INTEGRATED GRAMMAR CHECK FUNCTIONS
   // ==========================================================
+
+  const extractTextFromData = (data) => {
+    if (!data) return "";
+
+    const possiblePaths = [
+      data.text,
+      data.originalText,
+      data.original,
+      data.content,
+      data.data?.text,
+      data.data?.originalText,
+      data.data?.original,
+      data.result?.text,
+      data.result?.originalText,
+      data.response?.text,
+    ];
+
+    // If data is a string
+    if (typeof data === "string") return data;
+
+    // Try to find a non-empty string
+    const foundText = possiblePaths.find(
+      (text) => typeof text === "string" && text.trim().length > 0
+    );
+
+    return foundText || "";
+  };
+
+  // Extract matches from data
+  const extractMatchesFromData = (data) => {
+    if (!data) return [];
+
+    const possiblePaths = [
+      data.matches,
+      data.issues,
+      data.suggestions,
+      data.errors,
+      data.data?.matches,
+      data.data?.issues,
+      data.data?.suggestions,
+      data.result?.matches,
+      data.result?.issues,
+    ];
+
+    // Find the first array
+    const foundArray = possiblePaths.find((arr) => Array.isArray(arr));
+
+    return foundArray || [];
+  };
+
+  // Display text with highlights
+  const renderTextWithHighlights = (text, suggestions, textBoxIndex) => {
+    if (!text || !suggestions || suggestions.length === 0) {
+      return <span style={{ color: "#666" }}>{text}</span>;
+    }
+
+    // Highlight parts
+    const parts = [];
+    let lastIndex = 0;
+
+    const sortedSuggestions = [...suggestions].sort(
+      (a, b) => a.offset - b.offset
+    );
+
+    sortedSuggestions.forEach((suggestion, index) => {
+      const { offset, length, original } = suggestion;
+
+      // Add preceding normal text
+      if (offset > lastIndex) {
+        parts.push({
+          text: text.substring(lastIndex, offset),
+          isHighlight: false,
+          index: parts.length,
+        });
+      }
+
+      const highlightedText = text.substring(offset, offset + length);
+      parts.push({
+        text: highlightedText,
+        isHighlight: true,
+        suggestionIndex: index,
+        suggestion: suggestion,
+      });
+
+      lastIndex = offset + length;
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push({
+        text: text.substring(lastIndex),
+        isHighlight: false,
+        index: parts.length,
+      });
+    }
+
+    // Render
+    return (
+      <span style={{ lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+        {parts.map((part, idx) => {
+          if (part.isHighlight) {
+            return (
+              <span
+                key={idx}
+                style={{
+                  backgroundColor: "#ffebee",
+                  color: "#c62828",
+                  borderBottom: "2px solid #f44336",
+                  padding: "1px 2px",
+                  margin: "0 1px",
+                  borderRadius: "2px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  position: "relative",
+                }}
+                title={`Click to apply correction: "${part.text}" → "${part.suggestion.corrected}"`}
+                onClick={() =>
+                  applySingleSuggestionFromHighlight(
+                    textBoxIndex,
+                    part.suggestion
+                  )
+                }
+              >
+                {part.text}
+                <span
+                  style={{
+                    fontSize: "10px",
+                    background: "#f44336",
+                    color: "white",
+                    borderRadius: "3px",
+                    padding: "1px 3px",
+                    marginLeft: "4px",
+                  }}
+                >
+                  ✎
+                </span>
+              </span>
+            );
+          }
+          return <span key={idx}>{part.text}</span>;
+        })}
+      </span>
+    );
+  };
+
+  // Apply single correction from highlight
+  const applySingleSuggestionFromHighlight = (textBoxIndex, suggestion) => {
+    const newTextBoxes = [...(task.textBoxes || [])];
+    const textBox = newTextBoxes[textBoxIndex];
+
+    if (!textBox.text || !suggestion) return;
+
+    // Use exact offset for replacement
+    const start = suggestion.offset;
+    const end = start + suggestion.length;
+
+    if (start >= 0 && end <= textBox.text.length) {
+      // Verify the text to replace matches
+      const currentText = textBox.text.substring(start, end);
+      if (currentText === suggestion.original) {
+        const before = textBox.text.substring(0, start);
+        const after = textBox.text.substring(end);
+        textBox.text = before + suggestion.corrected + after;
+
+        // Remove applied suggestion from list
+        if (textBox.grammarResults?.suggestions) {
+          const updatedSuggestions = textBox.grammarResults.suggestions.filter(
+            (s) =>
+              !(
+                s.offset === suggestion.offset && s.length === suggestion.length
+              )
+          );
+
+          // Update grammar results
+          textBox.grammarResults = {
+            ...textBox.grammarResults,
+            suggestions: updatedSuggestions,
+          };
+        }
+
+        setTask({ ...task, textBoxes: newTextBoxes });
+        alert(`Applied: "${suggestion.original}" → "${suggestion.corrected}"`);
+      } else {
+        alert(
+          `Cannot apply correction: Found "${currentText}" at position ${start}, not "${suggestion.original}"`
+        );
+      }
+    }
+  };
+
   const handleIntegratedGrammarCheck = async (textBoxIndex, text) => {
+    console.log("Starting grammar check...");
+
     if (!text?.trim()) {
       alert("Please enter text to check");
       return;
     }
 
     try {
-      if (!editingStates[textBoxIndex]) {
-        toggleTextEditMode(textBoxIndex);
-      }
+      // Show loading state
+      const originalText = text;
+      console.log("Sending API request...");
 
       const response = await fetch("http://localhost:5000/api/grammar-check", {
         method: "POST",
@@ -396,13 +586,42 @@ const TaskDetails = () => {
         }),
       });
 
-      const data = await response.json();
+      console.log("Response status:", response.status, response.statusText);
 
+      // Check HTTP response status
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("HTTP error response:", errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Get response text and attempt to parse
+      const responseText = await response.text();
+      console.log(
+        "Raw response preview:",
+        responseText.substring(0, 200) +
+          (responseText.length > 200 ? "..." : "")
+      );
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log("Parsed data:", data);
+      } catch (parseError) {
+        console.error("JSON parsing failed:", parseError);
+        throw new Error("Server returned invalid JSON format");
+      }
+
+      // Check API business logic
       if (!data.success) {
+        console.error("API business error:", data);
         throw new Error(data.message || "Grammar check service unavailable");
       }
 
-      const grammarResults = processGrammarResults(data.data);
+      // Process grammar results
+      const grammarResults = processGrammarResults(data.data || data, text);
+      console.log("Processed grammar results:", grammarResults);
+
       const newTextBoxes = [...(task.textBoxes || [])];
       newTextBoxes[textBoxIndex] = {
         ...newTextBoxes[textBoxIndex],
@@ -410,50 +629,143 @@ const TaskDetails = () => {
       };
 
       setTask({ ...task, textBoxes: newTextBoxes });
+
+      // Automatically enter edit mode
+      if (!editingStates[textBoxIndex]) {
+        toggleTextEditMode(textBoxIndex);
+      }
+
+      // Display results
+      const issueCount = grammarResults.suggestions?.length || 0;
+      if (issueCount > 0) {
+        alert(`✅ Grammar check completed! Found ${issueCount} grammar issues`);
+      } else {
+        alert("✅ Grammar check completed! No grammar issues found");
+      }
     } catch (error) {
       console.error("Grammar check failed:", error);
-      alert("Grammar check failed: " + error.message);
+
+      // User-friendly error messages
+      let errorMessage = error.message;
+      if (
+        error.message.includes("Failed to fetch") ||
+        error.message.includes("NetworkError")
+      ) {
+        errorMessage =
+          "Cannot connect to server, please check network connection";
+      } else if (error.message.includes("JSON")) {
+        errorMessage = "Server returned invalid response format";
+      } else if (error.message.includes("404")) {
+        errorMessage = "Grammar check service not found (404)";
+      } else if (error.message.includes("500")) {
+        errorMessage = "Internal server error (500)";
+      }
+
+      alert(`Grammar check failed: ${errorMessage}`);
     }
   };
 
-  const processGrammarResults = (data) => {
-    const { matches, originalText: checkedText } = data;
-    let corrected = checkedText;
-    const suggestions = [];
+  const processGrammarResults = (data, originalText) => {
+    console.log("Processing grammar data:", data);
+    console.log("Original text:", originalText);
 
-    const sortedMatches = [...matches].sort((a, b) => b.offset - a.offset);
+    try {
+      // Safely extract text (prefer API-returned text, fall back to original)
+      const checkedText = extractTextFromData(data) || originalText || "";
 
-    sortedMatches.forEach((match, index) => {
-      if (match.replacements && match.replacements.length > 0) {
-        const bestReplacement = match.replacements[0].value;
+      if (!checkedText) {
+        console.error("Cannot extract text content");
+        return {
+          correctedText: "",
+          suggestions: [],
+          originalText: "",
+          timestamp: new Date().toISOString(),
+          error: "No text content found",
+        };
+      }
 
-        suggestions.unshift({
-          id: `${match.offset}-${match.length}`,
-          original: checkedText.substring(
-            match.offset,
-            match.offset + match.length
-          ),
-          corrected: bestReplacement,
-          message: match.message,
-          category: match.rule?.category || "grammar",
-          context: match.context.text,
-          offset: match.offset,
-          length: match.length,
+      // Safely extract matches
+      const matches = extractMatchesFromData(data);
+      console.log(`Found ${matches.length} matches`);
+
+      let corrected = checkedText;
+      const suggestions = [];
+
+      // Process matches
+      if (matches.length > 0) {
+        // Sort from end to beginning
+        const sortedMatches = [...matches].sort((a, b) => {
+          const offsetA = a.offset || a.position || 0;
+          const offsetB = b.offset || b.position || 0;
+          return offsetB - offsetA;
         });
 
-        corrected =
-          corrected.substring(0, match.offset) +
-          bestReplacement +
-          corrected.substring(match.offset + match.length);
-      }
-    });
+        sortedMatches.forEach((match, index) => {
+          try {
+            const offset = match.offset || match.position || 0;
+            const length = match.length || match.errorLength || 1;
 
-    return {
-      correctedText: corrected,
-      suggestions: suggestions,
-      originalText: checkedText,
-      timestamp: new Date().toISOString(),
-    };
+            // Ensure offset and length are valid
+            if (offset < 0 || offset >= checkedText.length || length <= 0) {
+              console.warn(`Invalid match: offset=${offset}, length=${length}`);
+              return;
+            }
+
+            if (match.replacements && match.replacements.length > 0) {
+              const bestReplacement =
+                match.replacements[0].value ||
+                match.replacements[0].replacement ||
+                match.replacements[0];
+
+              if (!bestReplacement) return;
+
+              // Safely extract original text
+              const start = Math.min(Math.max(offset, 0), checkedText.length);
+              const end = Math.min(start + length, checkedText.length);
+              const originalSlice = checkedText.substring(start, end);
+
+              suggestions.unshift({
+                id: `${offset}-${length}-${index}`,
+                original: originalSlice,
+                corrected: bestReplacement,
+                message: match.message || "Grammar suggestion",
+                category: match.rule?.category || "grammar",
+                context: match.context?.text || "",
+                offset: offset,
+                length: length,
+              });
+
+              // Apply correction
+              if (start < corrected.length) {
+                corrected =
+                  corrected.substring(0, start) +
+                  bestReplacement +
+                  corrected.substring(end);
+              }
+            }
+          } catch (matchError) {
+            console.warn("Error processing individual match:", matchError);
+          }
+        });
+      }
+
+      return {
+        correctedText: corrected,
+        suggestions: suggestions,
+        originalText: checkedText,
+        timestamp: new Date().toISOString(),
+        matchCount: matches.length,
+      };
+    } catch (error) {
+      console.error("Error processing grammar results:", error);
+      return {
+        correctedText: "",
+        suggestions: [],
+        originalText: "",
+        timestamp: new Date().toISOString(),
+        error: error.message,
+      };
+    }
   };
 
   const applyGrammarCorrections = (textBoxIndex) => {
@@ -464,7 +776,7 @@ const TaskDetails = () => {
       textBox.text = textBox.grammarResults.correctedText;
       textBox.grammarResults = null;
       setTask({ ...task, textBoxes: newTextBoxes });
-      alert("Applied all grammar corrections");
+      alert("All grammar corrections applied");
     }
   };
 
@@ -473,14 +785,45 @@ const TaskDetails = () => {
     const textBox = newTextBoxes[textBoxIndex];
 
     if (textBox.text && suggestion) {
-      textBox.text = textBox.text.replace(
-        suggestion.original,
-        suggestion.corrected
-      );
-      setTask({ ...task, textBoxes: newTextBoxes });
-      alert(
-        `Applied correction: "${suggestion.original}" → "${suggestion.corrected}"`
-      );
+      // Use exact offset for replacement
+      const start = suggestion.offset;
+      const end = start + suggestion.length;
+
+      if (start >= 0 && end <= textBox.text.length) {
+        const currentText = textBox.text.substring(start, end);
+
+        if (currentText === suggestion.original) {
+          const before = textBox.text.substring(0, start);
+          const after = textBox.text.substring(end);
+          textBox.text = before + suggestion.corrected + after;
+
+          // Remove applied suggestion from list
+          if (textBox.grammarResults?.suggestions) {
+            const updatedSuggestions =
+              textBox.grammarResults.suggestions.filter(
+                (s) =>
+                  !(
+                    s.offset === suggestion.offset &&
+                    s.length === suggestion.length
+                  )
+              );
+
+            textBox.grammarResults = {
+              ...textBox.grammarResults,
+              suggestions: updatedSuggestions,
+            };
+          }
+
+          setTask({ ...task, textBoxes: newTextBoxes });
+          alert(
+            `Applied correction: "${suggestion.original}" → "${suggestion.corrected}"`
+          );
+        } else {
+          alert(
+            `Text has changed, cannot apply correction: Found "${currentText}", not "${suggestion.original}"`
+          );
+        }
+      }
     }
   };
 
@@ -518,7 +861,7 @@ const TaskDetails = () => {
       });
     } catch (error) {
       console.error("Failed to delete grammar feedback:", error);
-      alert("Delete failed");
+      alert("Deletion failed");
     }
   };
 
@@ -529,10 +872,9 @@ const TaskDetails = () => {
     if (textBox.grammarResults?.correctedText) {
       textBox.text = textBox.grammarResults.correctedText;
       setTask({ ...task, textBoxes: newTextBoxes });
-      alert("Applied corrected version");
+      alert("Corrected version applied");
     }
   };
-
   // ==========================================================
   // OTHER FUNCTIONS
   // ==========================================================
@@ -1626,7 +1968,6 @@ const TaskDetails = () => {
       <div style={styles.left}>
         <h3 style={{ color: "white" }}>Task Navigation</h3>
         {renderTree()}
-        <LoadPayment />
       </div>
 
       {/* Center content */}
@@ -2167,7 +2508,6 @@ const TaskDetails = () => {
       <div style={styles.right}>
         <h3>Task Information</h3>
 
-        {/* 新增：任务基本信息 */}
         <div style={styles.taskBasicInfo}>
           <p style={styles.truncateText}>
             <strong>Type:</strong>{" "}
